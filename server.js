@@ -80,3 +80,24 @@ app.get("/push", (req, res) => {
 
   res.json({ ok: true });
 });
+let cache = {
+  online: true,
+  players: 0,
+  maxPlayers: 8,
+  load: 0
+};
+
+app.get("/status", (req, res) => {
+  res.json(cache);
+});
+
+app.get("/push", (req, res) => {
+  const players = parseInt(req.query.players || "0", 10);
+
+  cache.players = players;
+  cache.maxPlayers = 8;
+  cache.load = Math.round((players / 8) * 100);
+  cache.online = true;
+
+  res.json({ ok: true });
+});

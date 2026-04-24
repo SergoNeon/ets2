@@ -5,7 +5,7 @@ const app = express();
 app.use(cors());
 
 const PORT = process.env.PORT || 3000;
-const MAX_PLAYERS = parseInt(process.env.MAX_PLAYERS || "8", 10);
+const MAX_PLAYERS = 8;
 
 let cache = {
   mode: "push",
@@ -31,22 +31,11 @@ app.get("/push", (req, res) => {
   const players = parseInt(req.query.players || "0", 10);
   const safePlayers = Math.max(0, Math.min(players, MAX_PLAYERS));
 
-  cache = {
-    mode: "push",
-    online: true,
-    visualOnline: true,
-    name: "BRILL LOGISTICS",
-    players: safePlayers,
-    maxPlayers: MAX_PLAYERS,
-    load: Math.round((safePlayers / MAX_PLAYERS) * 100),
-    map: "ETS2",
-    updatedAt: new Date().toISOString()
-  };
+  cache.players = safePlayers;
+  cache.load = Math.round((safePlayers / MAX_PLAYERS) * 100);
+  cache.updatedAt = new Date().toISOString();
 
-  res.json({
-    ok: true,
-    players: safePlayers
-  });
+  res.json({ ok: true, players: safePlayers });
 });
 
 app.listen(PORT, "0.0.0.0", () => {

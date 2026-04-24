@@ -1,48 +1,53 @@
 const express = require("express");
 const cors = require("cors");
-const { GameDig } = require("gamedig");
+const gamedig = require("gamedig");
 
 const app = express();
-
 app.use(cors());
 
-const SERVER_HOST = "brill-rp-ets2.nodecraft.gg";
-const QUERY_PORTS = [27016, 27015];
-const DEFAULT_MAX_PLAYERS = 8;
+const PORT = process.env.PORT || 3000;
+const SERVER_HOST = process.env.SERVER_HOST || "brill-rp-ets2.nodecraft.gg";
+const SERVER_PORTS = (process.env.SERVER_PORTS || "27016,27015")
+  .split(",")
+  .map(p => parseInt(p.trim(), 10))
+  .filter(Boolean);
 
-let visualOnline = true;
+const MAX_PLAYERS = parseInt(process.env.MAX_PLAYERS, 10) || 8;
 
 let cache = {
-  mode: "loading",
+  mode: "starting",
   online: false,
   visualOnline: true,
   name: "BRILL LOGISTICS",
-  players: 0,
-  maxPlayers: DEFAULT_MAX_PLAYERS,
+  players: 1,
+  maxPlayers: MAX_PLAYERS,
   map: "ETS2",
-  ping: null,
-  load: 0,
+  ping: 42,
+  load: 12,
   updatedAt: new Date().toISOString()
 };
 
-async function queryPort(port) {
-  return await GameDig.query({
-    type: "protocol-valve",
-    host: SERVER_HOST,
-    port,
-    maxAttempts: 2,
-    socketTimeout: 5000
-  });
-}
+app.get("/", (req, res) => {
+  res.send("BRILL LOGISTICS API is running");
+});
+
+app.get("/status", (req, res) => {
+  res.json(cache);
+});
 
 async function updateStatus() {
-  for (const port of QUERY_PORTS) {
+  for (const port of SERVER_PORTS) {
     try {
-      const state = await queryPort(port);
+      const state = await gamedig.query({
+        type: "protocol-valve",
+        host: SERVER_HOST,
+        port,
+        socketTimeout: 5000,
+        maxAttempts: 1
+      });
 
       const players = state.players ? state.players.length : 0;
-      const maxPlayers = state.maxplayers || DEFAULT_MAX_PLAYERS;
-      const load = maxPlayers > 0 ? Math.round((players / maxPlayers) * 100) : 0;
+      const maxPlayers = state.maxplayers || MAX_PLAYERS;
 
       cache = {
         mode: "real",
@@ -52,9 +57,8 @@ async function updateStatus() {
         players,
         maxPlayers,
         map: state.map || "ETS2",
-        ping: state.ping || null,
-        load,
-        port,
+        ping: state.ping || 42,
+        load: Math.round((players / maxPlayers) * 100),
         updatedAt: new Date().toISOString()
       };
 
@@ -62,51 +66,25 @@ async function updateStatus() {
     } catch (e) {}
   }
 
-  // Если реальный query не ответил — включаем AAA fallback
-  const hour = new Date().getHours();
-  const simulatedPlayers = visualOnline ? Math.max(1, (hour % DEFAULT_MAX_PLAYERS)) : 0;
-  const load = Math.round((simulatedPlayers / DEFAULT_MAX_PLAYERS) * 100);
+  const minute = new Date().getMinutes();
+  const fakePlayers = Math.max(1, Math.floor((minute / 60) * MAX_PLAYERS));
 
   cache = {
     mode: "visual",
     online: false,
-    visualOnline,
+    visualOnline: true,
     name: "BRILL LOGISTICS",
-    players: simulatedPlayers,
-    maxPlayers: DEFAULT_MAX_PLAYERS,
+    players: fakePlayers,
+    maxPlayers: MAX_PLAYERS,
     map: "ETS2",
-    ping: visualOnline ? 42 : null,
-    load,
-    port: null,
+    ping: 42,
+    load: Math.round((fakePlayers / MAX_PLAYERS) * 100),
     updatedAt: new Date().toISOString()
   };
 }
 
-updateStatus();
-setInterval(updateStatus, 30000);
-
-app.get("/", (req, res) => {
-  res.send("BRILL LOGISTICS AAA Monitoring API is running");
-});
-
-app.get("/status", (req, res) => {
-  res.json(cache);
-});
-
-app.get("/visual/on", (req, res) => {
-  visualOnline = true;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`BRILL API started on port ${PORT}`);
   updateStatus();
-  res.json({ ok: true, visualOnline });
-});
-
-app.get("/visual/off", (req, res) => {
-  visualOnline = false;
-  updateStatus();
-  res.json({ ok: true, visualOnline });
-});
-
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log(`BRILL AAA Monitoring API started on port ${PORT}`);
+  setInterval(updateStatus, 30000);
 });
